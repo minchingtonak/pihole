@@ -1,0 +1,78 @@
+# https://github.com/pi-hole/docker-pi-hole?tab=readme-ov-file#note-on-watchtower
+# https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
+services:
+  traefik:
+    image: traefik:v3.1
+    container_name: traefik
+    ports:
+      - 80:80
+      - 443:443
+    dns:
+      - 127.0.0.1
+      - 1.1.1.1
+    environment:
+      - PORKBUN_API_KEY=${PORKBUN_API_KEY}
+      - PORKBUN_SECRET_API_KEY=${PORKBUN_SECRET_API_KEY}
+      - DNSSEC=false
+    volumes:
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./data/traefik/letsencypt:/letsencrypt
+      # - ./data/traefik/traefik.log:/etc/traefik/traefik.log
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.traefik.entrypoints=http
+      - traefik.http.routers.traefik.rule=Host(`${TRAEFIK_DASHBOARD_DOMAIN}`)
+      # generate creds with: echo $(htpasswd -nB akmin) | sed -e s/\\$/\\$\\$/g
+      - traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_DASHBOARD_CREDENTIALS}
+      - traefik.http.middlewares.traefik-https-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=https
+      - traefik.http.routers.traefik.middlewares=traefik-https-redirect
+      - traefik.http.routers.traefik-secure.entrypoints=https
+      - traefik.http.routers.traefik-secure.rule=Host(`${TRAEFIK_DASHBOARD_DOMAIN}`)
+      - traefik.http.routers.traefik-secure.middlewares=traefik-auth
+      - traefik.http.routers.traefik-secure.tls=true
+      - traefik.http.routers.traefik-secure.tls.certresolver=porkbun
+      - traefik.http.routers.traefik-secure.tls.domains[0].main=${TRAEFIK_SSL_DOMAIN}
+      - traefik.http.routers.traefik-secure.tls.domains[0].sans=*.${TRAEFIK_SSL_DOMAIN}
+      - traefik.http.routers.traefik-secure.service=api@internal
+    restart: unless-stopped
+    networks:
+      - traefik
+  pihole:
+    image: pihole/pihole:latest
+    container_name: pihole
+    ports:
+      - 53:53/tcp
+      - 53:53/udp
+    environment:
+      - TZ=America/Los_Angeles
+      - WEBPASSWORD=${PIHOLE_WEBUI_PASSWORD}
+      - PIHOLE_DNS_=1.1.1.1;1.0.0.1
+    volumes:
+      - ./data/pihole/pihole:/etc/pihole
+      - ./data/pihole/dnsmasq.d:/etc/dnsmasq.d
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.pihole.rule=Host(`${PIHOLE_PROXY_DOMAIN}`)
+      - traefik.http.routers.pihole.entrypoints=https
+      - traefik.http.routers.pihole.tls=true
+      - traefik.http.routers.pihole.tls.certresolver=porkbun
+      - traefik.http.services.pihole.loadbalancer.server.port=80
+    restart: unless-stopped
+    networks:
+      - traefik
+  # unbound:
+  #   image: mvance/unbound-rpi:latest
+  #   container_name: unbound
+  #   ports:
+  #     - 5335:53/tcp
+  #     - 5335:53/udp
+  #   restart: unless-stopped
+  #   volumes:
+  #     # wget https://www.internic.net/domain/named.root -qO- | sudo tee ./root.hints
+  #     - ./root.hints:/var/lib/unbound/root.hints:ro
+  #     - ./pi-hole.conf:/etc/unbound/unbound.conf.d/pi-hole.conf:ro
+  #     - ./unbound.log:/var/log/unbound/unbound.log
+networks:
+  traefik:
