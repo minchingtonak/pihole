@@ -13,7 +13,6 @@ services:
     environment:
       - PORKBUN_API_KEY=${PORKBUN_API_KEY}
       - PORKBUN_SECRET_API_KEY=${PORKBUN_SECRET_API_KEY}
-      - DNSSEC=false
     volumes:
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./data/traefik/letsencypt:/letsencrypt
@@ -46,9 +45,10 @@ services:
       - 53:53/tcp
       - 53:53/udp
     environment:
+      - DNSSEC=false
       - TZ=America/Los_Angeles
-      - WEBPASSWORD=${PIHOLE_WEBUI_PASSWORD}
       - PIHOLE_DNS_=1.1.1.1;1.0.0.1
+      - WEBPASSWORD=${PIHOLE_WEBUI_PASSWORD}
     volumes:
       - ./data/pihole/pihole:/etc/pihole
       - ./data/pihole/dnsmasq.d:/etc/dnsmasq.d
